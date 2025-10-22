@@ -14,7 +14,7 @@ const BanHang = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
   const [customerData, setCustomerData] = useState({
     name: '',
     phone: '',
@@ -28,27 +28,15 @@ const BanHang = () => {
   }, []);
 
   const handleServiceToggle = (serviceId: string) => {
-    setSelectedServices(prev =>
-      prev.includes(serviceId)
-        ? prev.filter(id => id !== serviceId)
-        : [...prev, serviceId]
-    );
-  };
-
-  const selectAllServices = () => {
-    setSelectedServices(services.map(s => s.id));
-  };
-
-  const clearAllServices = () => {
-    setSelectedServices([]);
+    setSelectedService(prev => prev === serviceId ? null : serviceId);
   };
 
   const calculateTotal = () => {
     const vehiclePrice = vehicles.find(v => v.id === selectedVehicle)?.price || 0;
-    const servicesTotal = services
-      .filter(s => selectedServices.includes(s.id))
-      .reduce((sum, s) => sum + s.price, 0);
-    return vehiclePrice + servicesTotal;
+    const servicePrice = selectedService 
+      ? services.find(s => s.id === selectedService)?.price || 0 
+      : 0;
+    return vehiclePrice + servicePrice;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -63,7 +51,7 @@ const BanHang = () => {
     addOrder({
       customerId: customer.id,
       vehicleId: selectedVehicle,
-      services: selectedServices,
+      services: selectedService ? [selectedService] : [],
       totalAmount: calculateTotal(),
       status: 'pending',
     });
@@ -71,7 +59,7 @@ const BanHang = () => {
     toast.success('Đã tạo đơn hàng thành công');
     setCustomerData({ name: '', phone: '', email: '', address: '' });
     setSelectedVehicle('');
-    setSelectedServices([]);
+    setSelectedService(null);
   };
 
   const formatCurrency = (amount: number) => {
@@ -163,21 +151,14 @@ const BanHang = () => {
               </div>
 
               <div>
-                <Label>Dịch vụ thêm</Label>
+                <Label>Dịch vụ thêm (chọn 1)</Label>
                 <div className="mt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-muted-foreground">{selectedServices.length} dịch vụ đã chọn</div>
-                    <div className="flex items-center space-x-2">
-                      <Button size="sm" onClick={selectAllServices}>Chọn tất cả</Button>
-                      <Button size="sm" variant="ghost" onClick={clearAllServices}>Bỏ chọn</Button>
-                    </div>
-                  </div>
                   <div className="space-y-2">
                   {services.map((service) => (
                     <div key={service.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={service.id}
-                        checked={selectedServices.includes(service.id)}
+                        checked={selectedService === service.id}
                         onCheckedChange={() => handleServiceToggle(service.id)}
                       />
                       <label htmlFor={service.id} className="text-sm flex-1 cursor-pointer">
