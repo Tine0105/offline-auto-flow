@@ -72,6 +72,12 @@ export const addVehicle = (vehicle: Omit<Vehicle, 'id' | 'createdAt'>): Vehicle 
   return newVehicle;
 };
 
+export const deleteVehicle = (vehicleId: string): void => {
+  const vehicles = getVehicles();
+  const filtered = vehicles.filter(v => v.id !== vehicleId);
+  saveVehicles(filtered);
+};
+
 export const updateVehicleQuantity = (vehicleId: string, quantity: number): void => {
   const vehicles = getVehicles();
   const index = vehicles.findIndex(v => v.id === vehicleId);
@@ -170,4 +176,64 @@ export const initializeDefaultData = (): void => {
       description: 'Bảo dưỡng miễn phí 1 năm',
     });
   }
+};
+
+// Vehicle types / brands
+const BRAND_KEY = 'vehicle_brands';
+
+export const getBrands = (): string[] => {
+  const data = localStorage.getItem(BRAND_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveBrands = (brands: string[]): void => {
+  localStorage.setItem(BRAND_KEY, JSON.stringify(brands));
+};
+
+export const addBrand = (brand: string): string[] => {
+  const brands = getBrands();
+  if (!brands.includes(brand)) {
+    brands.push(brand);
+    saveBrands(brands);
+  }
+  return brands;
+};
+
+export const deleteBrand = (brand: string): void => {
+  const brands = getBrands();
+  const filtered = brands.filter(b => b !== brand);
+  saveBrands(filtered);
+  // Optionally remove brand from vehicles (leave vehicles as-is to avoid data loss)
+};
+
+// Inventory (phiếu kiểm kê)
+export interface InventoryReport {
+  id: string;
+  createdBy: string; // user or manager name/id
+  createdAt: string;
+  items: { vehicleId: string; countedQuantity: number; note?: string }[];
+  note?: string;
+}
+
+const INVENTORY_KEY = 'inventory_reports';
+
+export const getInventoryReports = (): InventoryReport[] => {
+  const data = localStorage.getItem(INVENTORY_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveInventoryReports = (reports: InventoryReport[]): void => {
+  localStorage.setItem(INVENTORY_KEY, JSON.stringify(reports));
+};
+
+export const addInventoryReport = (report: Omit<InventoryReport, 'id' | 'createdAt'>): InventoryReport => {
+  const reports = getInventoryReports();
+  const newReport: InventoryReport = {
+    ...report,
+    id: `INV${Date.now()}`,
+    createdAt: new Date().toISOString(),
+  };
+  reports.push(newReport);
+  saveInventoryReports(reports);
+  return newReport;
 };

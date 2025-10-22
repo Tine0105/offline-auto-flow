@@ -5,12 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getVehicles, addVehicle, Vehicle } from '@/utils/storage';
+import { getVehicles, addVehicle, deleteVehicle, getBrands, addBrand, deleteBrand, addInventoryReport, getVehicles as fetchVehicles, Vehicle } from '@/utils/storage';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 
 const Kho = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     model: '',
     brand: '',
@@ -23,10 +26,15 @@ const Kho = () => {
 
   useEffect(() => {
     loadVehicles();
+    loadBrands();
   }, []);
 
   const loadVehicles = () => {
     setVehicles(getVehicles());
+  };
+
+  const loadBrands = () => {
+    setBrands(getBrands());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -59,6 +67,56 @@ const Kho = () => {
     });
     loadVehicles();
   };
+
+  const handleDeleteVehicle = (id: string) => {
+    if (!confirm('Xác nhận xóa xe khỏi kho?')) return;
+    deleteVehicle(id);
+    toast.success('Đã xóa xe');
+    loadVehicles();
+  };
+
+  const handleAddBrand = () => {
+    const brand = prompt('Nhập tên hãng xe mới:');
+    if (!brand) return;
+    addBrand(brand.trim());
+    toast.success('Đã thêm hãng');
+    loadBrands();
+  };
+
+  const handleDeleteBrand = (brand: string) => {
+    if (!confirm(`Xác nhận xóa hãng ${brand}?`)) return;
+    deleteBrand(brand);
+    toast.success('Đã xóa hãng');
+    loadBrands();
+  };
+
+  // Inventory dialog state
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventoryNote, setInventoryNote] = useState('');
+  const [inventoryItems, setInventoryItems] = useState<{ vehicleId: string; countedQuantity: number; note?: string }[]>([]);
+
+  const openInventory = () => {
+    // initialize items from current vehicles
+    const items = fetchVehicles().map(v => ({ vehicleId: v.id, countedQuantity: v.quantity }));
+    setInventoryItems(items);
+    setInventoryNote('');
+    setInventoryOpen(true);
+  };
+
+  const sendInventory = () => {
+    if (inventoryItems.length === 0) {
+      toast.error('Không có mục nào để kiểm kê');
+      return;
+    }
+    addInventoryReport({
+      createdBy: 'Quản lý kho',
+      items: inventoryItems,
+      note: inventoryNote,
+    });
+    toast.success('Đã gửi phiếu kiểm kê tới quản lý');
+    setInventoryOpen(false);
+  };
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -158,6 +216,46 @@ const Kho = () => {
             </form>
           </CardContent>
         </Card>
+      
+      {/* Inventory Dialog */}
+      <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu kiểm kê</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label>Ghi chú</Label>
+              <Textarea value={inventoryNote} onChange={(e) => setInventoryNote((e.target as HTMLTextAreaElement).value)} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Danh sách kiểm kê</div>
+              <div className="grid gap-2 max-h-72 overflow-auto">
+                {inventoryItems.map((it, idx) => {
+                  const v = vehicles.find(vv => vv.id === it.vehicleId);
+                  return (
+                    <div key={it.vehicleId} className="flex items-center gap-2">
+                      <div className="w-1/2">{v ? `${v.brand} ${v.model}` : it.vehicleId}</div>
+                      <Input type="number" value={it.countedQuantity} onChange={(e) => {
+                        const v = [...inventoryItems];
+                        v[idx] = { ...v[idx], countedQuantity: parseInt((e.target as HTMLInputElement).value || '0') };
+                        setInventoryItems(v);
+                      }} className="w-24" />
+                      <div className="text-sm text-muted-foreground"> {v ? `Trên hệ thống: ${v.quantity}` : ''}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setInventoryOpen(false)}>Hủy</Button>
+              <Button onClick={sendInventory}>Gửi phiếu</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
         <Card>
           <CardHeader>
@@ -174,6 +272,7 @@ const Kho = () => {
                   <TableHead>Màu</TableHead>
                   <TableHead>Giá bán</TableHead>
                   <TableHead>Tồn kho</TableHead>
+                  <TableHead>Hành động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,11 +296,57 @@ const Kho = () => {
                           {vehicle.quantity}
                         </span>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleDeleteVehicle(vehicle.id)} className="text-destructive">Xóa</Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quản lý hãng xe</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm text-muted-foreground">Danh sách hãng hiện có</div>
+              <div>
+                <Button onClick={handleAddBrand}>
+                  Thêm hãng
+                </Button>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              {brands.length === 0 ? (
+                <div className="text-muted-foreground">Chưa có hãng nào</div>
+              ) : (
+                brands.map(b => (
+                  <div key={b} className="flex items-center justify-between bg-muted/10 p-2 rounded">
+                    <div>{b}</div>
+                    <div>
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteBrand(b)} className="text-destructive">Xóa</Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Phiếu kiểm kê kho</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Button onClick={openInventory}>Tạo / Gửi phiếu kiểm kê</Button>
+            </div>
           </CardContent>
         </Card>
       </div>

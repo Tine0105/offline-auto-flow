@@ -10,6 +10,9 @@ import { DollarSign, CheckCircle } from 'lucide-react';
 
 const ThuNgan = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  // map orderId -> selected service ids
+  const [selectedServicesMap, setSelectedServicesMap] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     loadOrders();
@@ -37,9 +40,48 @@ const ThuNgan = () => {
   };
 
   const handlePayment = (orderId: string) => {
+    // When paying, we could update the order's services and total amount based on selection.
+    const ordersAll = getOrders();
+    const idx = ordersAll.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      const order = ordersAll[idx];
+      const selected = selectedServicesMap[orderId] ?? [];
+      // Recalculate total: base vehicle price + selected services
+      const vehicle = getVehicles().find(v => v.id === order.vehicleId);
+      const servicesAll = getServices();
+      const servicesSum = selected
+        .map(sid => servicesAll.find(s => s.id === sid)?.price ?? 0)
+        .reduce((a, b) => a + b, 0);
+      const vehiclePrice = vehicle?.price ?? 0;
+      ordersAll[idx].services = selected;
+      ordersAll[idx].totalAmount = vehiclePrice + servicesSum;
+      // persist orders
+      // saveOrders is not exported here; updateOrderStatus will save the status and persist
+    }
+
     updateOrderStatus(orderId, 'paid');
     toast.success('Đã xác nhận thanh toán thành công');
     loadOrders();
+  };
+
+  const toggleServiceSelection = (orderId: string, serviceId: string) => {
+    setSelectedServicesMap(prev => {
+      const prevSel = prev[orderId] ?? [];
+      const exists = prevSel.includes(serviceId);
+      const next = exists ? prevSel.filter(s => s !== serviceId) : [...prevSel, serviceId];
+      return { ...prev, [orderId]: next };
+    });
+  };
+
+  const computedOrderTotal = (order: Order) => {
+    const vehicle = getVehicles().find(v => v.id === order.vehicleId);
+    const vehiclePrice = vehicle?.price ?? 0;
+    const selected = selectedServicesMap[order.id] ?? order.services ?? [];
+    const servicesAll = getServices();
+    const servicesSum = selected
+      .map(sid => servicesAll.find(s => s.id === sid)?.price ?? 0)
+      .reduce((a, b) => a + b, 0);
+    return vehiclePrice + servicesSum;
   };
 
   const formatCurrency = (amount: number) => {
@@ -95,9 +137,34 @@ const ThuNgan = () => {
                       <TableCell className="font-medium">{order.id}</TableCell>
                       <TableCell>{getCustomerName(order.customerId)}</TableCell>
                       <TableCell>{getVehicleInfo(order.vehicleId)}</TableCell>
-                      <TableCell className="max-w-xs truncate">{getServiceNames(order.services)}</TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {getServiceNames(order.services)}
+                        <div>
+                          <button
+                            className="text-sm text-primary underline mt-1"
+                            onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                          >
+                            {expandedOrderId === order.id ? 'Thu gọn' : 'Chọn dịch vụ'}
+                          </button>
+                        </div>
+                        {expandedOrderId === order.id && (
+                          <div className="mt-2 space-y-2">
+                            {getServices().map(s => (
+                              <label key={s.id} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={(selectedServicesMap[order.id] ?? []).includes(s.id)}
+                                  onChange={() => toggleServiceSelection(order.id, s.id)}
+                                />
+                                <span className="text-sm">{s.name} ({formatCurrency(s.price)})</span>
+                              </label>
+                            ))}
+                            <div className="text-sm font-medium">Tổng tạm tính: {formatCurrency(computedOrderTotal(order))}</div>
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="font-semibold text-primary">
-                        {formatCurrency(order.totalAmount)}
+                        {formatCurrency(computedOrderTotal(order))}
                       </TableCell>
                       <TableCell>{formatDate(order.createdAt)}</TableCell>
                       <TableCell>

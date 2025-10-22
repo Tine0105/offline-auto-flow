@@ -35,6 +35,14 @@ const BanHang = () => {
     );
   };
 
+  const selectAllServices = () => {
+    setSelectedServices(services.map(s => s.id));
+  };
+
+  const clearAllServices = () => {
+    setSelectedServices([]);
+  };
+
   const calculateTotal = () => {
     const vehiclePrice = vehicles.find(v => v.id === selectedVehicle)?.price || 0;
     const servicesTotal = services
@@ -156,7 +164,15 @@ const BanHang = () => {
 
               <div>
                 <Label>Dịch vụ thêm</Label>
-                <div className="space-y-2 mt-2">
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-muted-foreground">{selectedServices.length} dịch vụ đã chọn</div>
+                    <div className="flex items-center space-x-2">
+                      <Button size="sm" onClick={selectAllServices}>Chọn tất cả</Button>
+                      <Button size="sm" variant="ghost" onClick={clearAllServices}>Bỏ chọn</Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
                   {services.map((service) => (
                     <div key={service.id} className="flex items-center space-x-2">
                       <Checkbox
@@ -170,6 +186,7 @@ const BanHang = () => {
                       </label>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
 
