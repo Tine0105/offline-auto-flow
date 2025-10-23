@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getOrders, getVehicles, getServices, addService, deleteService, getCustomers, Service } from '@/utils/storage';
+import { getOrders, getVehicles, getServices, addService, deleteService, getCustomers, Service, getPromotions, addPromotion, deletePromotion, Promotion } from '@/utils/storage';
 import { toast } from 'sonner';
 import { BarChart3, Package, Users, DollarSign, Plus, Trash2 } from 'lucide-react';
 
@@ -22,6 +22,8 @@ const QuanLy = () => {
     price: '',
     description: '',
   });
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [promoForm, setPromoForm] = useState({ name: '', discountPercent: '', description: '', vehicleId: '' });
 
   useEffect(() => {
     loadData();
@@ -29,6 +31,7 @@ const QuanLy = () => {
 
   const loadData = () => {
     setServices(getServices());
+    setPromotions(getPromotions());
     
     const orders = getOrders();
     const paidOrders = orders.filter(o => o.status === 'paid');
@@ -58,6 +61,29 @@ const QuanLy = () => {
 
     toast.success('Đã thêm dịch vụ mới');
     setServiceForm({ name: '', price: '', description: '' });
+    loadData();
+  };
+
+  const handleAddPromotion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!promoForm.name || !promoForm.discountPercent) {
+      toast.error('Vui lòng nhập tên và phần trăm giảm');
+      return;
+    }
+    addPromotion({
+      name: promoForm.name,
+      description: promoForm.description,
+      discountPercent: parseFloat(promoForm.discountPercent),
+      vehicleIds: promoForm.vehicleId ? [promoForm.vehicleId] : [],
+    });
+    toast.success('Đã thêm khuyến mãi');
+    setPromoForm({ name: '', discountPercent: '', description: '', vehicleId: '' });
+    loadData();
+  };
+
+  const handleDeletePromotion = (id: string) => {
+    deletePromotion(id);
+    toast.success('Đã xóa khuyến mãi');
     loadData();
   };
 
@@ -168,6 +194,66 @@ const QuanLy = () => {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Plus className="h-5 w-5 mr-2" />
+              Quản lý khuyến mãi
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddPromotion} className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <Label htmlFor="promoName">Tên khuyến mãi</Label>
+                <Input id="promoName" value={promoForm.name} onChange={(e) => setPromoForm({...promoForm, name: e.target.value})} />
+              </div>
+              <div>
+                <Label htmlFor="promoDiscount">Giảm (%)</Label>
+                <Input id="promoDiscount" type="number" value={promoForm.discountPercent} onChange={(e) => setPromoForm({...promoForm, discountPercent: e.target.value})} />
+              </div>
+              <div>
+                <Label htmlFor="promoVehicle">Áp dụng cho xe (tuỳ chọn)</Label>
+                <Input id="promoVehicle" placeholder="Mã xe (ví dụ VH...)" value={promoForm.vehicleId} onChange={(e)=>setPromoForm({...promoForm, vehicleId: e.target.value})} />
+              </div>
+              <div className="col-span-3">
+                <Label htmlFor="promoDesc">Mô tả</Label>
+                <Input id="promoDesc" value={promoForm.description} onChange={(e)=>setPromoForm({...promoForm, description: e.target.value})} />
+              </div>
+              <div className="col-span-3">
+                <Button type="submit">Thêm khuyến mãi</Button>
+              </div>
+            </form>
+
+            <div>
+              <h3 className="font-medium mb-2">Danh sách khuyến mãi</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mã</TableHead>
+                    <TableHead>Tên</TableHead>
+                    <TableHead>Giảm (%)</TableHead>
+                    <TableHead>Áp dụng xe</TableHead>
+                    <TableHead>Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {promotions.map(p => (
+                    <TableRow key={p.id}>
+                      <TableCell>{p.id}</TableCell>
+                      <TableCell>{p.name}</TableCell>
+                      <TableCell>{p.discountPercent}%</TableCell>
+                      <TableCell>{(p.vehicleIds || []).join(', ') || 'Tất cả'}</TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="destructive" onClick={()=>handleDeletePromotion(p.id)}>Xóa</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 

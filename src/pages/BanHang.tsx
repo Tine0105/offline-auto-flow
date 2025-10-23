@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getVehicles, getServices, saveServices, addCustomer, addOrder, Vehicle, Service } from '@/utils/storage';
+import { getVehicles, getServices, saveServices, addCustomer, addOrder, getCustomers, Vehicle, Service, Customer } from '@/utils/storage';
 import { toast } from 'sonner';
 import { Search, ShoppingCart } from 'lucide-react';
 
@@ -19,10 +19,13 @@ const BanHang = () => {
     name: '',
     phone: '',
     email: '',
-    address: '',
+    house: '',
+    hamlet: '',
+    ward: '',
+    city: '',
   });
 
-  const customerFields = ['name', 'phone', 'email', 'address'] as const;
+  const customerFields = ['name', 'phone', 'email', 'house', 'hamlet', 'ward', 'city'] as const;
 
   useEffect(() => {
     const availableVehicles = getVehicles()?.filter((v) => v.quantity > 0) || [];
@@ -69,6 +72,24 @@ const BanHang = () => {
     );
   };
 
+  const handlePhoneLookup = (phone: string) => {
+    if (!phone) return;
+    const existing = getCustomers().find((c) => c.phone === phone);
+    if (existing) {
+      setCustomerData((prev) => ({
+        ...prev,
+        name: existing.name || prev.name,
+        email: existing.email || prev.email,
+        house: existing.address?.house || '',
+        hamlet: existing.address?.hamlet || '',
+        ward: existing.address?.ward || '',
+        city: existing.address?.city || '',
+        phone: existing.phone || prev.phone,
+      }));
+      toast(`Tìm thấy khách hàng cũ: ${existing.name}`);
+    }
+  };
+
   const calculateTotal = () => {
     const vehiclePrice = vehicles.find((v) => v.id === selectedVehicle)?.price || 0;
     const servicesTotal = services
@@ -85,7 +106,20 @@ const BanHang = () => {
       return;
     }
 
-    const customer = addCustomer(customerData);
+    const customerPayload: Omit<Customer, 'id' | 'createdAt'> = {
+      name: customerData.name,
+      phone: customerData.phone,
+      email: customerData.email,
+      address: {
+        house: customerData.house || undefined,
+        hamlet: customerData.hamlet || undefined,
+        ward: customerData.ward || undefined,
+        city: customerData.city || undefined,
+        raw: [customerData.house, customerData.hamlet, customerData.ward, customerData.city].filter(Boolean).join(', '),
+      },
+    };
+
+    const customer = addCustomer(customerPayload);
     addOrder({
       customerId: customer.id,
       vehicleId: selectedVehicle,
@@ -95,7 +129,7 @@ const BanHang = () => {
     });
 
     toast.success('Đã tạo đơn hàng thành công');
-    setCustomerData({ name: '', phone: '', email: '', address: '' });
+  setCustomerData({ name: '', phone: '', email: '', house: '', hamlet: '', ward: '', city: '' });
     setSelectedVehicle('');
     setSelectedServices([]);
   };
@@ -131,13 +165,20 @@ const BanHang = () => {
                       ? 'Số điện thoại *'
                       : field === 'email'
                       ? 'Email'
-                      : 'Địa chỉ'}
+                      : field === 'house'
+                      ? 'Số nhà'
+                      : field === 'hamlet'
+                      ? 'Ấp / Thôn / Xóm (không bắt buộc)'
+                      : field === 'ward'
+                      ? 'Xã / Phường'
+                      : 'Tỉnh / Thành phố'}
                   </Label>
                   <Input
                     id={field}
                     type={field === 'email' ? 'email' : 'text'}
-                    value={customerData[field]}
+                    value={customerData[field as keyof typeof customerData]}
                     onChange={(e) => setCustomerData({ ...customerData, [field]: e.target.value })}
+                    onBlur={field === 'phone' ? (e) => handlePhoneLookup(e.currentTarget.value) : undefined}
                     placeholder={
                       field === 'name'
                         ? 'Nguyễn Văn A'
@@ -145,7 +186,13 @@ const BanHang = () => {
                         ? '0123456789'
                         : field === 'email'
                         ? 'email@example.com'
-                        : 'Địa chỉ'
+                        : field === 'house'
+                        ? 'Số nhà (ví dụ: 123/4)'
+                        : field === 'hamlet'
+                        ? 'Ấp, thôn hoặc xóm (không bắt buộc)'
+                        : field === 'ward'
+                        ? 'Xã / Phường'
+                        : 'Tỉnh / Thành phố'
                     }
                   />
                 </div>

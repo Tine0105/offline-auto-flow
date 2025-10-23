@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder, PaymentHistoryEntry } from '@/utils/storage';
+import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder, PaymentHistoryEntry, formatAddress, PaymentMethod, getPromotions } from '@/utils/storage';
 import { toast } from 'sonner';
 import { DollarSign, CheckCircle, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -14,6 +14,11 @@ const ThuNgan = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   // map orderId -> selected service ids
   const [selectedServicesMap, setSelectedServicesMap] = useState<Record<string, string[]>>({});
+  // map orderId -> payment method
+  const [paymentMethodMap, setPaymentMethodMap] = useState<Record<string, PaymentMethod | undefined>>({});
+  // map orderId -> selected promotion id
+  const [promoMap, setPromoMap] = useState<Record<string, string | undefined>>({});
+  const [availablePromotions, setAvailablePromotions] = useState(() => getPromotions());
 
   useEffect(() => {
     loadOrders();
@@ -69,6 +74,11 @@ const ThuNgan = () => {
         const s = servicesAll.find(x => x.id === sid);
         return { id: sid, name: s?.name ?? 'N/A', price: s?.price ?? 0 };
       });
+      const paymentMethod = paymentMethodMap[orderId] ?? undefined;
+      const promoId = promoMap[orderId];
+      const promo = getPromotions().find(p => p.id === promoId);
+      const baseTotal = order.totalAmount ?? (vehicle?.price ?? 0) + servicesSnapshot.reduce((a,b) => a + b.price, 0);
+      const discountedTotal = promo && promo.discountPercent ? Math.max(0, Math.round(baseTotal * (1 - promo.discountPercent / 100))) : baseTotal;
 
       addPaymentHistoryEntry({
         orderId: order.id,
@@ -77,7 +87,9 @@ const ThuNgan = () => {
         vehicleModel: vehicle?.model ?? 'N/A',
         vehicleBrand: vehicle?.brand ?? 'N/A',
         services: servicesSnapshot,
-        totalAmount: order.totalAmount ?? (vehicle?.price ?? 0) + servicesSnapshot.reduce((a,b) => a + b.price, 0),
+        paymentMethod,
+        promotionId: promoId,
+        totalAmount: discountedTotal,
         paidAt: new Date().toISOString(),
       });
     }
@@ -127,6 +139,7 @@ const ThuNgan = () => {
       customerId: string;
       vehicle: string;
       services: string;
+      paymentMethod?: string;
       totalAmount: number;
       paidAt: string;
     };
@@ -137,18 +150,44 @@ const ThuNgan = () => {
       customerId: h.customerId,
       vehicle: `${h.vehicleBrand} ${h.vehicleModel}`,
       services: h.services.map(s => `${s.name} (${s.price})`).join('; '),
+      paymentMethod: h.paymentMethod ?? '',
+      // attach promotion name if exists
+      // (we'll place the promotion name into paymentMethod field? better add column)
       totalAmount: h.totalAmount,
       paidAt: h.paidAt,
     }));
 
-    const header: (keyof Row)[] = ['id','orderId','customerId','vehicle','services','totalAmount','paidAt'];
-    const csv = [header.join(',')].concat(rows.map(r =>
-      header.map(hk => {
-        const v = r[hk];
-        // escape double quotes
-        if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`;
-        return String(v ?? '');
-      }).join(',')
+    // build rows with promotion name available via lookup
+    const promotions = getPromotions();
+    const rowsWithPromo = history.map(h => ({
+      id: h.id,
+      orderId: h.orderId,
+      customerId: h.customerId,
+      vehicle: `${h.vehicleBrand} ${h.vehicleModel}`,
+      services: h.services.map(s => `${s.name} (${s.price})`).join('; '),
+      paymentMethod: h.paymentMethod ?? '',
+      promotion: promotions.find(p => p.id === h.promotionId)?.name ?? '',
+      totalAmount: h.totalAmount,
+      paidAt: h.paidAt,
+    }));
+
+    const header = ['id','orderId','customerId','vehicle','services','paymentMethod','promotion','totalAmount','paidAt'];
+    type RowWithPromo = {
+      id: string; orderId: string; customerId: string; vehicle: string; services: string; paymentMethod: string; promotion: string; totalAmount: number; paidAt: string
+    };
+    const rowsTyped: RowWithPromo[] = rowsWithPromo;
+    const csv = [header.join(',')].concat(rowsTyped.map(r =>
+      [
+        r.id,
+        r.orderId,
+        r.customerId,
+        r.vehicle,
+        r.services,
+        r.paymentMethod,
+        r.promotion,
+        String(r.totalAmount),
+        r.paidAt,
+      ].map(v => (typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : String(v))).join(',')
     )).join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -158,6 +197,12 @@ const ThuNgan = () => {
     a.download = `payment_history_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handlePaymentMethodChange = (orderId: string, method: PaymentMethod) => {
+    setPaymentMethodMap(prev => ({ ...prev, [orderId]: method }));
+    // also persist to order so saving order keeps the method
+    updateOrder(orderId, { paymentMethod: method });
   };
 
   const openHistoryDetail = (h: PaymentHistoryEntry) => {
@@ -261,11 +306,54 @@ const ThuNgan = () => {
                               </label>
                             ))}
                             <div className="text-sm font-medium">Tổng tạm tính: {formatCurrency(computedOrderTotal(order))}</div>
+                            <div className="pt-2">
+                              <label className="text-sm">Hình thức thanh toán</label>
+                              <select
+                                className="block w-full mt-1 p-2 border rounded"
+                                value={paymentMethodMap[order.id] ?? ''}
+                                onChange={(e) => handlePaymentMethodChange(order.id, e.target.value as PaymentMethod)}
+                              >
+                                <option value="">Chọn hình thức</option>
+                                <option value="cash">Tiền mặt</option>
+                                <option value="bank_transfer">Chuyển khoản</option>
+                                <option value="card">Thẻ</option>
+                                <option value="other">Khác</option>
+                              </select>
+                            </div>
+                              <div className="pt-2">
+                                <label className="text-sm">Khuyến mãi (tuỳ chọn)</label>
+                                <select
+                                  className="block w-full mt-1 p-2 border rounded"
+                                  value={promoMap[order.id] ?? ''}
+                                  onChange={(e) => setPromoMap(prev => ({ ...prev, [order.id]: e.target.value || undefined }))}
+                                >
+                                  <option value="">Không áp dụng</option>
+                                  {availablePromotions.map(p => {
+                                    // show only promotions that apply to this vehicle or all
+                                    if (p.vehicleIds && p.vehicleIds.length > 0 && !p.vehicleIds.includes(order.vehicleId)) return null;
+                                    return <option key={p.id} value={p.id}>{p.name} ({p.discountPercent}%)</option>;
+                                  })}
+                                </select>
+                              </div>
                           </div>
                         )}
                       </TableCell>
                       <TableCell className="font-semibold text-primary">
-                        {formatCurrency(computedOrderTotal(order))}
+                        {(() => {
+                          const base = computedOrderTotal(order);
+                          const promoId = promoMap[order.id];
+                          const promo = getPromotions().find(p => p.id === promoId);
+                          if (promo && promo.discountPercent) {
+                            const discounted = Math.max(0, Math.round(base * (1 - promo.discountPercent / 100)));
+                            return (
+                              <div>
+                                <div className="text-sm line-through text-muted-foreground">{formatCurrency(base)}</div>
+                                <div className="text-lg font-semibold text-primary">{formatCurrency(discounted)}</div>
+                              </div>
+                            );
+                          }
+                          return <div className="text-lg font-semibold">{formatCurrency(base)}</div>;
+                        })()}
                       </TableCell>
                       <TableCell>{formatDate(order.createdAt)}</TableCell>
                       <TableCell>
@@ -360,6 +448,10 @@ const ThuNgan = () => {
                 <div>
                   <div className="text-sm text-muted-foreground">Số điện thoại</div>
                   <div className="font-medium">{getCustomers().find(c => c.id === selectedHistory.customerId)?.phone || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Địa chỉ</div>
+                  <div className="font-medium">{formatAddress(getCustomers().find(c => c.id === selectedHistory.customerId)?.address)}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Xe</div>

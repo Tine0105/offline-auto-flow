@@ -17,7 +17,14 @@ export interface Customer {
   name: string;
   phone: string;
   email: string;
-  address: string;
+  // structured address to support filtering by area
+  address: {
+    house?: string; // số nhà
+    hamlet?: string; // ấp, thôn, xóm (không bắt buộc)
+    ward?: string; // xã / phường
+    city?: string; // tỉnh / thành phố
+    raw?: string; // fallback free text for older records
+  };
   createdAt: string;
 }
 
@@ -35,6 +42,7 @@ export interface Order {
   services: string[]; // service IDs
   totalAmount: number;
   status: 'pending' | 'paid';
+  paymentMethod?: PaymentMethod;
   createdAt: string;
   paidAt?: string;
 }
@@ -48,9 +56,13 @@ export interface PaymentHistoryEntry {
   vehicleModel: string;
   vehicleBrand: string;
   services: { id: string; name: string; price: number }[];
+  paymentMethod?: PaymentMethod;
+  promotionId?: string;
   totalAmount: number;
   paidAt: string;
 }
+
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'card' | 'other';
 
 const STORAGE_KEYS = {
   VEHICLES: 'vehicles',
@@ -58,6 +70,7 @@ const STORAGE_KEYS = {
   SERVICES: 'services',
   ORDERS: 'orders',
   PAYMENT_HISTORY: 'payment_history',
+  PROMOTIONS: 'promotions',
 };
 
 // Generic storage functions
@@ -102,7 +115,48 @@ export const updateVehicleQuantity = (vehicleId: string, quantity: number): void
 };
 
 // Customer operations
-export const getCustomers = (): Customer[] => getFromStorage<Customer>(STORAGE_KEYS.CUSTOMERS);
+export const getCustomers = (): Customer[] => {
+  const raw = getFromStorage<unknown>(STORAGE_KEYS.CUSTOMERS);
+  let changed = false;
+  const normalized: Customer[] = (raw as unknown[]).map((c) => {
+    if (!c || typeof c !== 'object') return c as Customer;
+    const obj = c as Record<string, unknown>;
+    const addr = obj.address;
+    if (typeof addr === 'string') {
+      changed = true;
+      return {
+        ...(obj as Omit<Customer, 'address'>),
+        address: { raw: addr },
+      } as Customer;
+    }
+    if (!addr) {
+      changed = true;
+      return {
+        ...(obj as Omit<Customer, 'address'>),
+        address: { raw: '' },
+      } as Customer;
+    }
+    return {
+      id: String(obj.id ?? `CUS-migrated-${Date.now()}`),
+      name: String(obj.name ?? ''),
+      phone: String(obj.phone ?? ''),
+      email: String(obj.email ?? ''),
+      address: (addr && typeof addr === 'object') ? (() => {
+        const a = addr as Record<string, unknown>;
+        return {
+          house: typeof a.house === 'string' ? a.house as string : undefined,
+          hamlet: typeof a.hamlet === 'string' ? a.hamlet as string : undefined,
+          ward: typeof a.ward === 'string' ? a.ward as string : undefined,
+          city: typeof a.city === 'string' ? a.city as string : undefined,
+          raw: typeof a.raw === 'string' ? a.raw as string : undefined,
+        };
+      })() : { raw: String(addr ?? '') },
+      createdAt: String(obj.createdAt ?? new Date().toISOString()),
+    };
+  });
+  if (changed) saveCustomers(normalized);
+  return normalized;
+};
 export const saveCustomers = (customers: Customer[]): void => saveToStorage(STORAGE_KEYS.CUSTOMERS, customers);
 
 export const addCustomer = (customer: Omit<Customer, 'id' | 'createdAt'>): Customer => {
@@ -212,6 +266,35 @@ export const addPaymentHistoryEntry = (entry: Omit<PaymentHistoryEntry, 'id'>): 
   return newEntry;
 };
 
+// Promotions
+export interface Promotion {
+  id: string;
+  name: string;
+  description?: string;
+  // applies to specific vehicle IDs (if empty -> applies to all)
+  vehicleIds?: string[];
+  // discount percent (0-100)
+  discountPercent: number;
+  startAt?: string; // ISO date
+  endAt?: string; // ISO date
+}
+
+export const getPromotions = (): Promotion[] => getFromStorage<Promotion>(STORAGE_KEYS.PROMOTIONS);
+export const savePromotions = (items: Promotion[]): void => saveToStorage(STORAGE_KEYS.PROMOTIONS, items);
+
+export const addPromotion = (p: Omit<Promotion, 'id'>): Promotion => {
+  const items = getPromotions();
+  const newP: Promotion = { ...p, id: `PROMO${Date.now()}` } as Promotion;
+  items.push(newP);
+  savePromotions(items);
+  return newP;
+};
+
+export const deletePromotion = (id: string): void => {
+  const items = getPromotions();
+  savePromotions(items.filter(x => x.id !== id));
+};
+
 // Initialize default services
 export const initializeDefaultData = (): void => {
   const services = getServices();
@@ -292,4 +375,18 @@ export const addInventoryReport = (report: Omit<InventoryReport, 'id' | 'created
   reports.push(newReport);
   saveInventoryReports(reports);
   return newReport;
+};
+
+// Helper to format structured address into single-line string
+export const formatAddress = (addr?: Customer['address']): string => {
+  if (!addr) return '';
+  const parts: string[] = [];
+  if (addr.house) parts.push(addr.house);
+  if (addr.hamlet) parts.push(addr.hamlet);
+  const wardCity: string[] = [];
+  if (addr.ward) wardCity.push(addr.ward);
+  if (addr.city) wardCity.push(addr.city);
+  if (wardCity.length) parts.push(wardCity.join(', '));
+  if (!parts.length && addr.raw) return addr.raw;
+  return parts.join('. ');
 };
