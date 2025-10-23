@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder } from '@/utils/storage';
+import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder, PaymentHistoryEntry } from '@/utils/storage';
 import { toast } from 'sonner';
-import { DollarSign, CheckCircle } from 'lucide-react';
+import { DollarSign, CheckCircle, Info } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 const ThuNgan = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -114,6 +115,8 @@ const ThuNgan = () => {
 
   // Payment history state & export
   const [history, setHistory] = useState(() => getPaymentHistory());
+  const [selectedHistory, setSelectedHistory] = useState<PaymentHistoryEntry | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const refreshHistory = () => setHistory(getPaymentHistory());
 
@@ -155,6 +158,11 @@ const ThuNgan = () => {
     a.download = `payment_history_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const openHistoryDetail = (h: PaymentHistoryEntry) => {
+    setSelectedHistory(h);
+    setDetailOpen(true);
   };
 
   const toggleServiceSelection = (orderId: string, serviceId: string) => {
@@ -315,7 +323,12 @@ const ThuNgan = () => {
                   {history.map(h => (
                     <TableRow key={h.id}>
                       <TableCell className="font-medium">{h.id}</TableCell>
-                      <TableCell>{h.orderId}</TableCell>
+                      <TableCell className="flex items-center gap-2">
+                        <span>{h.orderId}</span>
+                        <button title="Xem chi tiết" onClick={() => openHistoryDetail(h)} className="p-1 hover:bg-muted rounded">
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </TableCell>
                       <TableCell>{`${h.vehicleBrand} ${h.vehicleModel}`}</TableCell>
                       <TableCell className="max-w-xs truncate">{h.services.map(s => s.name).join(', ')}</TableCell>
                       <TableCell>{formatCurrency(h.totalAmount)}</TableCell>
@@ -327,6 +340,52 @@ const ThuNgan = () => {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Chi tiết giao dịch</DialogTitle>
+              <DialogDescription>Thông tin người mua và thông tin cơ bản từ Bán hàng</DialogDescription>
+            </DialogHeader>
+            {selectedHistory ? (
+              <div className="space-y-3 mt-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">Mã đơn</div>
+                  <div className="font-medium">{selectedHistory.orderId}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Khách hàng</div>
+                  <div className="font-medium">{getCustomers().find(c => c.id === selectedHistory.customerId)?.name || selectedHistory.customerId}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Số điện thoại</div>
+                  <div className="font-medium">{getCustomers().find(c => c.id === selectedHistory.customerId)?.phone || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Xe</div>
+                  <div className="font-medium">{`${selectedHistory.vehicleBrand} ${selectedHistory.vehicleModel}`}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Dịch vụ</div>
+                  <div className="font-medium">{selectedHistory.services.map(s => `${s.name} (${formatCurrency(s.price)})`).join(', ')}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Tổng</div>
+                  <div className="font-medium">{formatCurrency(selectedHistory.totalAmount)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Thời gian thanh toán</div>
+                  <div className="font-medium">{formatDate(selectedHistory.paidAt)}</div>
+                </div>
+              </div>
+            ) : (
+              <div>Không có dữ liệu</div>
+            )}
+            <DialogFooter className="mt-4">
+              <DialogClose className="btn">Đóng</DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
