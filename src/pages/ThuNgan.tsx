@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order } from '@/utils/storage';
+import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder } from '@/utils/storage';
 import { toast } from 'sonner';
 import { DollarSign, CheckCircle } from 'lucide-react';
 
@@ -55,13 +55,106 @@ const ThuNgan = () => {
       const vehiclePrice = vehicle?.price ?? 0;
       ordersAll[idx].services = selected;
       ordersAll[idx].totalAmount = vehiclePrice + servicesSum;
-      // persist orders
-      // saveOrders is not exported here; updateOrderStatus will save the status and persist
+      // persist orders via updateOrderStatus below (which also sets paidAt)
+    }
+
+    // create payment history snapshot before updating status
+    const order = getOrders().find(o => o.id === orderId);
+    if (order) {
+      const vehicle = getVehicles().find(v => v.id === order.vehicleId);
+      const servicesAll = getServices();
+      const selected = selectedServicesMap[orderId] ?? order.services ?? [];
+      const servicesSnapshot = selected.map(sid => {
+        const s = servicesAll.find(x => x.id === sid);
+        return { id: sid, name: s?.name ?? 'N/A', price: s?.price ?? 0 };
+      });
+
+      addPaymentHistoryEntry({
+        orderId: order.id,
+        customerId: order.customerId,
+        vehicleId: order.vehicleId,
+        vehicleModel: vehicle?.model ?? 'N/A',
+        vehicleBrand: vehicle?.brand ?? 'N/A',
+        services: servicesSnapshot,
+        totalAmount: order.totalAmount ?? (vehicle?.price ?? 0) + servicesSnapshot.reduce((a,b) => a + b.price, 0),
+        paidAt: new Date().toISOString(),
+      });
     }
 
     updateOrderStatus(orderId, 'paid');
     toast.success('Đã xác nhận thanh toán thành công');
     loadOrders();
+    // refresh history list
+    refreshHistory();
+  };
+
+  const handleSaveOrder = (orderId: string) => {
+    const selected = selectedServicesMap[orderId] ?? [];
+    const vehicle = getVehicles().find(v => v.id === getOrders().find(o => o.id === orderId)!.vehicleId);
+    const servicesAll = getServices();
+    const servicesSum = selected.map(sid => servicesAll.find(s => s.id === sid)?.price ?? 0).reduce((a,b) => a+b, 0);
+    const vehiclePrice = vehicle?.price ?? 0;
+    const total = vehiclePrice + servicesSum;
+    const updated = updateOrder(orderId, { services: selected, totalAmount: total });
+    if (updated) {
+      toast.success('Đã lưu thay đổi đơn hàng');
+      loadOrders();
+    } else {
+      toast.error('Không tìm thấy đơn hàng để lưu');
+    }
+  };
+
+  const handleDeleteOrder = (orderId: string) => {
+    // confirm
+  if (!confirm('Bạn có chắc muốn xóa đơn hàng này?')) return;
+    deleteOrder(orderId);
+    toast('Đã xóa đơn hàng');
+    loadOrders();
+  };
+
+  // Payment history state & export
+  const [history, setHistory] = useState(() => getPaymentHistory());
+
+  const refreshHistory = () => setHistory(getPaymentHistory());
+
+  const exportHistoryCSV = () => {
+    type Row = {
+      id: string;
+      orderId: string;
+      customerId: string;
+      vehicle: string;
+      services: string;
+      totalAmount: number;
+      paidAt: string;
+    };
+
+    const rows: Row[] = history.map(h => ({
+      id: h.id,
+      orderId: h.orderId,
+      customerId: h.customerId,
+      vehicle: `${h.vehicleBrand} ${h.vehicleModel}`,
+      services: h.services.map(s => `${s.name} (${s.price})`).join('; '),
+      totalAmount: h.totalAmount,
+      paidAt: h.paidAt,
+    }));
+
+    const header: (keyof Row)[] = ['id','orderId','customerId','vehicle','services','totalAmount','paidAt'];
+    const csv = [header.join(',')].concat(rows.map(r =>
+      header.map(hk => {
+        const v = r[hk];
+        // escape double quotes
+        if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`;
+        return String(v ?? '');
+      }).join(',')
+    )).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `payment_history_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const toggleServiceSelection = (orderId: string, serviceId: string) => {
@@ -172,7 +265,7 @@ const ThuNgan = () => {
                           Chờ thanh toán
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="flex items-center gap-2">
                         <Button
                           size="sm"
                           onClick={() => handlePayment(order.id)}
@@ -181,12 +274,57 @@ const ThuNgan = () => {
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Thanh toán
                         </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleSaveOrder(order.id)}>Lưu</Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteOrder(order.id)}>Xóa</Button>
                       </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex items-center">
+            <CardTitle className="flex items-center">
+              <CheckCircle className="h-5 w-5 mr-2 text-success" />
+              Lịch sử thanh toán
+            </CardTitle>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" onClick={exportHistoryCSV}>Xuất CSV</Button>
+              <Button size="sm" variant="ghost" onClick={refreshHistory}>Làm mới</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {history.length === 0 ? (
+              <div className="text-center text-muted-foreground">Chưa có lịch sử thanh toán</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mã</TableHead>
+                    <TableHead>Đơn hàng</TableHead>
+                    <TableHead>Xe</TableHead>
+                    <TableHead>Dịch vụ</TableHead>
+                    <TableHead>Tổng</TableHead>
+                    <TableHead>Ngày thanh toán</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.map(h => (
+                    <TableRow key={h.id}>
+                      <TableCell className="font-medium">{h.id}</TableCell>
+                      <TableCell>{h.orderId}</TableCell>
+                      <TableCell>{`${h.vehicleBrand} ${h.vehicleModel}`}</TableCell>
+                      <TableCell className="max-w-xs truncate">{h.services.map(s => s.name).join(', ')}</TableCell>
+                      <TableCell>{formatCurrency(h.totalAmount)}</TableCell>
+                      <TableCell>{formatDate(h.paidAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

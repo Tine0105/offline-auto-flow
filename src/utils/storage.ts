@@ -39,11 +39,25 @@ export interface Order {
   paidAt?: string;
 }
 
+// Payment history entry (snapshot when an order is paid)
+export interface PaymentHistoryEntry {
+  id: string; // unique id for the history entry
+  orderId: string;
+  customerId: string;
+  vehicleId: string;
+  vehicleModel: string;
+  vehicleBrand: string;
+  services: { id: string; name: string; price: number }[];
+  totalAmount: number;
+  paidAt: string;
+}
+
 const STORAGE_KEYS = {
   VEHICLES: 'vehicles',
   CUSTOMERS: 'customers',
   SERVICES: 'services',
   ORDERS: 'orders',
+  PAYMENT_HISTORY: 'payment_history',
 };
 
 // Generic storage functions
@@ -154,6 +168,48 @@ export const updateOrderStatus = (orderId: string, status: 'paid'): void => {
       getVehicles().find(v => v.id === order.vehicleId)!.quantity - 1
     );
   }
+};
+
+// Update an order (used for editing pending orders)
+export const updateOrder = (orderId: string, changes: Partial<Order>): Order | null => {
+  const orders = getOrders();
+  const index = orders.findIndex(o => o.id === orderId);
+  if (index === -1) return null;
+  const updated = { ...orders[index], ...changes };
+  // keep id and createdAt from existing
+  updated.id = orders[index].id;
+  updated.createdAt = orders[index].createdAt;
+  orders[index] = updated;
+  saveOrders(orders);
+  return orders[index];
+};
+
+// Delete an order (used to remove pending orders)
+export const deleteOrder = (orderId: string): void => {
+  const orders = getOrders();
+  const filtered = orders.filter(o => o.id !== orderId);
+  saveOrders(filtered);
+};
+
+// Payment history operations
+export const getPaymentHistory = (): PaymentHistoryEntry[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.PAYMENT_HISTORY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const savePaymentHistory = (items: PaymentHistoryEntry[]): void => {
+  localStorage.setItem(STORAGE_KEYS.PAYMENT_HISTORY, JSON.stringify(items));
+};
+
+export const addPaymentHistoryEntry = (entry: Omit<PaymentHistoryEntry, 'id'>): PaymentHistoryEntry => {
+  const list = getPaymentHistory();
+  const newEntry: PaymentHistoryEntry = {
+    ...entry,
+    id: `PAY${Date.now()}`,
+  };
+  list.push(newEntry);
+  savePaymentHistory(list);
+  return newEntry;
 };
 
 // Initialize default services
