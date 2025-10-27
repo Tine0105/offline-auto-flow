@@ -6,12 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getVehicles, getServices, saveServices, addCustomer, addOrder, getCustomers, Vehicle, Service, Customer } from '@/utils/storage';
+import { getVehicles, getServices, saveServices, addCustomer, addOrder, getCustomers, getBrands, Vehicle, Service, Customer } from '@/utils/storage';
 import { toast } from 'sonner';
 import { Search, ShoppingCart } from 'lucide-react';
 
 const BanHang = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [selectedModelFilter, setSelectedModelFilter] = useState<string>('');
   const [services, setServices] = useState<Service[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -30,6 +33,7 @@ const BanHang = () => {
   useEffect(() => {
     const availableVehicles = getVehicles()?.filter((v) => v.quantity > 0) || [];
     let allServices = getServices() || [];
+    const allBrands = getBrands() || [];
 
     // Migration: ensure service IDs are unique. If duplicates exist (old data), fix and persist.
     const seen = new Map<string, number>();
@@ -64,6 +68,7 @@ const BanHang = () => {
 
     setVehicles(availableVehicles);
     setServices(allServices);
+    setBrands(allBrands);
   }, []);
 
   const handleServiceToggle = (serviceId: string) => {
@@ -211,19 +216,40 @@ const BanHang = () => {
             <CardContent className="space-y-4">
               <div>
                 <Label>Xe có sẵn</Label>
-                <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn xe" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles.length === 0 && <div className="p-2 text-sm">Không có xe khả dụng</div>}
-                    {vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.brand} {vehicle.model} - {formatCurrency(vehicle.price)} (Còn: {vehicle.quantity})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  <div>
+                    <Label className="text-xs">Hãng</Label>
+                    <select className="w-full p-2 border rounded" value={selectedBrand} onChange={(e) => { setSelectedBrand(e.target.value); setSelectedModelFilter(''); setSelectedVehicle(''); }}>
+                      <option value="">Tất cả hãng</option>
+                      {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Loại / Mẫu</Label>
+                    <select className="w-full p-2 border rounded" value={selectedModelFilter} onChange={(e) => { setSelectedModelFilter(e.target.value); setSelectedVehicle(''); }}>
+                      <option value="">Tất cả</option>
+                      {Array.from(new Set(vehicles.filter(v => !selectedBrand || v.brand === selectedBrand).map(v => v.model))).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Chọn xe</Label>
+                    <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn xe" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vehicles.filter(v => (!selectedBrand || v.brand === selectedBrand) && (!selectedModelFilter || v.model === selectedModelFilter)).length === 0 && <div className="p-2 text-sm">Không có xe khả dụng</div>}
+                        {vehicles.filter(v => (!selectedBrand || v.brand === selectedBrand) && (!selectedModelFilter || v.model === selectedModelFilter)).map((vehicle) => (
+                          <SelectItem key={vehicle.id} value={vehicle.id}>
+                            {vehicle.brand} {vehicle.model} - {formatCurrency(vehicle.price)} (Còn: {vehicle.quantity})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
 
               <div>
