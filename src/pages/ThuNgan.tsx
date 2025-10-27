@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder, PaymentHistoryEntry, formatAddress, PaymentMethod, getPromotions } from '@/utils/storage';
+import { getOrders, getCustomers, getVehicles, getServices, updateOrderStatus, Order, addPaymentHistoryEntry, getPaymentHistory, updateOrder, deleteOrder, PaymentHistoryEntry, formatAddress, PaymentMethod, getPromotions, generateRandomVin } from '@/utils/storage';
 import { toast } from 'sonner';
 import { DollarSign, CheckCircle, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -79,6 +79,9 @@ const ThuNgan = () => {
       const promo = getPromotions().find(p => p.id === promoId);
       const baseTotal = order.totalAmount ?? (vehicle?.price ?? 0) + servicesSnapshot.reduce((a,b) => a + b.price, 0);
       const discountedTotal = promo && promo.discountPercent ? Math.max(0, Math.round(baseTotal * (1 - promo.discountPercent / 100))) : baseTotal;
+      // generate a random serial/VIN for this sold unit (not tied to existing vins)
+      const serial = generateRandomVin(order.vehicleId);
+      updateOrder(orderId, { serialNumber: serial });
 
       addPaymentHistoryEntry({
         orderId: order.id,
@@ -89,6 +92,7 @@ const ThuNgan = () => {
         services: servicesSnapshot,
         paymentMethod,
         promotionId: promoId,
+        serialNumber: serial,
         totalAmount: discountedTotal,
         paidAt: new Date().toISOString(),
       });
@@ -157,7 +161,7 @@ const ThuNgan = () => {
       paidAt: h.paidAt,
     }));
 
-    // build rows with promotion name available via lookup
+    // build rows with promotion name available via lookup, include serialNumber
     const promotions = getPromotions();
     const rowsWithPromo = history.map(h => ({
       id: h.id,
@@ -167,13 +171,14 @@ const ThuNgan = () => {
       services: h.services.map(s => `${s.name} (${s.price})`).join('; '),
       paymentMethod: h.paymentMethod ?? '',
       promotion: promotions.find(p => p.id === h.promotionId)?.name ?? '',
+      serialNumber: h.serialNumber ?? '',
       totalAmount: h.totalAmount,
       paidAt: h.paidAt,
     }));
 
-    const header = ['id','orderId','customerId','vehicle','services','paymentMethod','promotion','totalAmount','paidAt'];
+    const header = ['id','orderId','customerId','vehicle','services','paymentMethod','promotion','serialNumber','totalAmount','paidAt'];
     type RowWithPromo = {
-      id: string; orderId: string; customerId: string; vehicle: string; services: string; paymentMethod: string; promotion: string; totalAmount: number; paidAt: string
+      id: string; orderId: string; customerId: string; vehicle: string; services: string; paymentMethod: string; promotion: string; serialNumber: string; totalAmount: number; paidAt: string
     };
     const rowsTyped: RowWithPromo[] = rowsWithPromo;
     const csv = [header.join(',')].concat(rowsTyped.map(r =>
@@ -185,6 +190,7 @@ const ThuNgan = () => {
         r.services,
         r.paymentMethod,
         r.promotion,
+        r.serialNumber,
         String(r.totalAmount),
         r.paidAt,
       ].map(v => (typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : String(v))).join(',')
@@ -320,6 +326,7 @@ const ThuNgan = () => {
                                 <option value="other">Khác</option>
                               </select>
                             </div>
+                            {/* VIN is generated automatically on payment and shown on the invoice */}
                               <div className="pt-2">
                                 <label className="text-sm">Khuyến mãi (tuỳ chọn)</label>
                                 <select
@@ -457,6 +464,12 @@ const ThuNgan = () => {
                   <div className="text-sm text-muted-foreground">Xe</div>
                   <div className="font-medium">{`${selectedHistory.vehicleBrand} ${selectedHistory.vehicleModel}`}</div>
                 </div>
+                {selectedHistory.serialNumber && (
+                  <div>
+                    <div className="text-sm text-muted-foreground">Số khung / VIN</div>
+                    <div className="font-medium">{selectedHistory.serialNumber}</div>
+                  </div>
+                )}
                 <div>
                   <div className="text-sm text-muted-foreground">Dịch vụ</div>
                   <div className="font-medium">{selectedHistory.services.map(s => `${s.name} (${formatCurrency(s.price)})`).join(', ')}</div>

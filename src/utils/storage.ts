@@ -10,7 +10,22 @@ export interface Vehicle {
   color: string;
   description: string;
   createdAt: string;
+  vins?: string[];
 }
+
+// Helper to generate simple VIN-like identifiers
+const generateVins = (prefix: string, count: number): string[] => {
+  const arr: string[] = [];
+  for (let i = 0; i < count; i++) {
+    arr.push(`${prefix}-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2,8)}`);
+  }
+  return arr;
+};
+
+// Generate a single random VIN (exported for callers that want a VIN without reserving existing units)
+export const generateRandomVin = (vehicleId: string): string => {
+  return generateVins(vehicleId, 1)[0];
+};
 
 export interface Customer {
   id: string;
@@ -43,6 +58,7 @@ export interface Order {
   totalAmount: number;
   status: 'pending' | 'paid';
   paymentMethod?: PaymentMethod;
+  serialNumber?: string;
   createdAt: string;
   paidAt?: string;
 }
@@ -58,6 +74,7 @@ export interface PaymentHistoryEntry {
   services: { id: string; name: string; price: number }[];
   paymentMethod?: PaymentMethod;
   promotionId?: string;
+  serialNumber?: string;
   totalAmount: number;
   paidAt: string;
 }
@@ -94,6 +111,13 @@ export const addVehicle = (vehicle: Omit<Vehicle, 'id' | 'createdAt'>): Vehicle 
     id: `VH${Date.now()}`,
     createdAt: new Date().toISOString(),
   };
+  // attach VINs if quantity provided
+  if (newVehicle.quantity && Number(newVehicle.quantity) > 0) {
+    // store vins array on the vehicle object
+    newVehicle.vins = generateVins(newVehicle.id, Number(newVehicle.quantity));
+  } else {
+    newVehicle.vins = [];
+  }
   vehicles.push(newVehicle);
   saveVehicles(vehicles);
   return newVehicle;
@@ -112,6 +136,33 @@ export const updateVehicleQuantity = (vehicleId: string, quantity: number): void
     vehicles[index].quantity = quantity;
     saveVehicles(vehicles);
   }
+};
+
+// Reserve a single unit from vehicle: remove one VIN (if exists) and decrement quantity.
+export const reserveVehicleUnit = (vehicleId: string): string | null => {
+  const vehicles = getVehicles();
+  const index = vehicles.findIndex(v => v.id === vehicleId);
+  if (index === -1) return null;
+  const v = vehicles[index];
+  if (!Array.isArray(v.vins)) v.vins = [];
+  const vin = v.vins.shift() ?? null;
+  if (typeof v.quantity === 'number' && v.quantity > 0) v.quantity = v.quantity - 1;
+  vehicles[index] = v;
+  saveVehicles(vehicles);
+  return vin;
+};
+
+// Release a VIN back to vehicle (increase quantity)
+export const releaseVehicleUnit = (vehicleId: string, vin: string): void => {
+  const vehicles = getVehicles();
+  const index = vehicles.findIndex(v => v.id === vehicleId);
+  if (index === -1) return;
+  const v = vehicles[index];
+  if (!Array.isArray(v.vins)) v.vins = [];
+  v.vins.push(vin);
+  v.quantity = (typeof v.quantity === 'number' ? v.quantity : 0) + 1;
+  vehicles[index] = v;
+  saveVehicles(vehicles);
 };
 
 // Customer operations
@@ -215,13 +266,30 @@ export const updateOrderStatus = (orderId: string, status: 'paid'): void => {
     orders[index].status = status;
     orders[index].paidAt = new Date().toISOString();
     saveOrders(orders);
-    
-    // Update vehicle quantity when order is paid
+    // decrement vehicle quantity when an order is paid
     const order = orders[index];
-    updateVehicleQuantity(order.vehicleId, 
-      getVehicles().find(v => v.id === order.vehicleId)!.quantity - 1
-    );
+    const vehicle = getVehicles().find(v => v.id === order.vehicleId);
+    if (vehicle) {
+      const newQty = Math.max(0, (typeof vehicle.quantity === 'number' ? vehicle.quantity : 0) - 1);
+      updateVehicleQuantity(vehicle.id, newQty);
+    }
   }
+};
+
+// Consume a specific VIN from a vehicle's vins array (used when cashier selects a chassis)
+export const consumeSpecificVehicleUnit = (vehicleId: string, vin: string): boolean => {
+  const vehicles = getVehicles();
+  const index = vehicles.findIndex(v => v.id === vehicleId);
+  if (index === -1) return false;
+  const v = vehicles[index];
+  if (!Array.isArray(v.vins)) v.vins = [];
+  const vinIndex = v.vins.findIndex(x => x === vin);
+  if (vinIndex === -1) return false;
+  v.vins.splice(vinIndex, 1);
+  v.quantity = (typeof v.quantity === 'number' ? v.quantity : 0) - 1;
+  vehicles[index] = v;
+  saveVehicles(vehicles);
+  return true;
 };
 
 // Update an order (used for editing pending orders)
