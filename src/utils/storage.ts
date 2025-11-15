@@ -8,6 +8,8 @@ export interface Vehicle {
   price: number;
   quantity: number;
   color: string;
+  colors?: string[]; // Available colors for this model
+  image?: string; // Base64 image data
   description: string;
   createdAt: string;
   vins?: string[];
