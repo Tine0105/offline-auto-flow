@@ -214,7 +214,7 @@ const BanHang = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
+               <div>
                 <Label>Xe có sẵn</Label>
                 <div className="grid grid-cols-3 gap-2 mb-2">
                   <div>
@@ -243,13 +243,32 @@ const BanHang = () => {
                         {vehicles.filter(v => (!selectedBrand || v.brand === selectedBrand) && (!selectedModelFilter || v.model === selectedModelFilter)).length === 0 && <div className="p-2 text-sm">Không có xe khả dụng</div>}
                         {vehicles.filter(v => (!selectedBrand || v.brand === selectedBrand) && (!selectedModelFilter || v.model === selectedModelFilter)).map((vehicle) => (
                           <SelectItem key={vehicle.id} value={vehicle.id}>
-                            {vehicle.brand} {vehicle.model} - {formatCurrency(vehicle.price)} (Còn: {vehicle.quantity})
+                            <div className="flex items-center gap-2">
+                              {vehicle.image && (
+                                <img src={vehicle.image} alt={vehicle.model} className="w-10 h-10 object-cover rounded" />
+                              )}
+                              <span>{vehicle.brand} {vehicle.model} - {formatCurrency(vehicle.price)} (Còn: {vehicle.quantity})</span>
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+                {selectedVehicle && vehicles.find(v => v.id === selectedVehicle)?.image && (
+                  <div className="mt-2">
+                    <img 
+                      src={vehicles.find(v => v.id === selectedVehicle)?.image} 
+                      alt="Xe đã chọn" 
+                      className="w-full max-w-md h-48 object-cover rounded-lg border"
+                    />
+                    {vehicles.find(v => v.id === selectedVehicle)?.colors && vehicles.find(v => v.id === selectedVehicle)!.colors!.length > 0 && (
+                      <div className="mt-2 text-sm text-muted-foreground">
+                        Màu sắc có sẵn: {vehicles.find(v => v.id === selectedVehicle)?.colors?.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>

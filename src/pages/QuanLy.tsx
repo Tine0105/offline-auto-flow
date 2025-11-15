@@ -7,7 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getOrders, getVehicles, getServices, addService, deleteService, getCustomers, Service, getPromotions, addPromotion, deletePromotion, Promotion } from '@/utils/storage';
 import { toast } from 'sonner';
-import { BarChart3, Package, Users, DollarSign, Plus, Trash2 } from 'lucide-react';
+import { BarChart3, Package, Users, DollarSign, Plus, Trash2, TrendingUp } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const QuanLy = () => {
   const [services, setServices] = useState<Service[]>([]);
@@ -24,10 +26,19 @@ const QuanLy = () => {
   });
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [promoForm, setPromoForm] = useState({ name: '', discountPercent: '', description: '', vehicleId: '' });
+  const [chartPeriod, setChartPeriod] = useState<'day' | 'month' | 'year'>('month');
+  const [revenueData, setRevenueData] = useState<any[]>([]);
+  const [vehicleStatsData, setVehicleStatsData] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const orders = getOrders();
+    const paidOrders = orders.filter(o => o.status === 'paid');
+    calculateRevenueData(paidOrders);
+  }, [chartPeriod]);
 
   const loadData = () => {
     setServices(getServices());
@@ -43,6 +54,62 @@ const QuanLy = () => {
       totalVehicles: getVehicles().reduce((sum, v) => sum + v.quantity, 0),
       totalCustomers: getCustomers().length,
     });
+
+    // Calculate revenue data based on period
+    calculateRevenueData(paidOrders);
+    calculateVehicleStats(paidOrders);
+  };
+
+  const calculateRevenueData = (paidOrders: any[]) => {
+    const dataMap = new Map<string, number>();
+    
+    paidOrders.forEach(order => {
+      const date = new Date(order.createdAt);
+      let key = '';
+      
+      if (chartPeriod === 'day') {
+        key = date.toLocaleDateString('vi-VN');
+      } else if (chartPeriod === 'month') {
+        key = `${date.getMonth() + 1}/${date.getFullYear()}`;
+      } else {
+        key = date.getFullYear().toString();
+      }
+      
+      dataMap.set(key, (dataMap.get(key) || 0) + order.totalAmount);
+    });
+    
+    const data = Array.from(dataMap.entries())
+      .map(([period, revenue]) => ({ period, revenue }))
+      .sort((a, b) => {
+        if (chartPeriod === 'day') {
+          return new Date(a.period.split('/').reverse().join('-')).getTime() - 
+                 new Date(b.period.split('/').reverse().join('-')).getTime();
+        }
+        return a.period.localeCompare(b.period);
+      })
+      .slice(-12); // Show last 12 periods
+    
+    setRevenueData(data);
+  };
+
+  const calculateVehicleStats = (paidOrders: any[]) => {
+    const vehicleMap = new Map<string, number>();
+    const vehicles = getVehicles();
+    
+    paidOrders.forEach(order => {
+      const vehicle = vehicles.find(v => v.id === order.vehicleId);
+      if (vehicle) {
+        const key = `${vehicle.brand} ${vehicle.model}`;
+        vehicleMap.set(key, (vehicleMap.get(key) || 0) + 1);
+      }
+    });
+    
+    const data = Array.from(vehicleMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10); // Top 10
+    
+    setVehicleStatsData(data);
   };
 
   const handleAddService = (e: React.FormEvent) => {
@@ -146,6 +213,62 @@ const QuanLy = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalCustomers}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <TrendingUp className="h-5 w-5 mr-2" />
+                  Biểu đồ doanh thu
+                </CardTitle>
+                <Select value={chartPeriod} onValueChange={(v: any) => setChartPeriod(v)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">Theo ngày</SelectItem>
+                    <SelectItem value="month">Theo tháng</SelectItem>
+                    <SelectItem value="year">Theo năm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" />
+                  <YAxis />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                  <Legend />
+                  <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" name="Doanh thu" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="h-5 w-5 mr-2" />
+                Xe bán chạy nhất
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={vehicleStatsData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" name="Số lượng bán" />
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>

@@ -21,8 +21,12 @@ const Kho = () => {
     price: '',
     quantity: '',
     color: '',
+    colors: [] as string[],
+    image: '',
     description: '',
   });
+  const [colorInput, setColorInput] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
 
   useEffect(() => {
     loadVehicles();
@@ -52,6 +56,8 @@ const Kho = () => {
       price: parseFloat(formData.price),
       quantity: parseInt(formData.quantity),
       color: formData.color,
+      colors: formData.colors,
+      image: formData.image,
       description: formData.description,
     });
 
@@ -63,8 +69,12 @@ const Kho = () => {
       price: '',
       quantity: '',
       color: '',
+      colors: [],
+      image: '',
       description: '',
     });
+    setColorInput('');
+    setImagePreview('');
     loadVehicles();
   };
 
@@ -118,6 +128,37 @@ const Kho = () => {
   };
 
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Kích thước ảnh không được vượt quá 2MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setFormData({ ...formData, image: result });
+        setImagePreview(result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddColor = () => {
+    if (!colorInput.trim()) return;
+    if (formData.colors.includes(colorInput.trim())) {
+      toast.error('Màu này đã tồn tại');
+      return;
+    }
+    setFormData({ ...formData, colors: [...formData.colors, colorInput.trim()] });
+    setColorInput('');
+  };
+
+  const handleRemoveColor = (color: string) => {
+    setFormData({ ...formData, colors: formData.colors.filter(c => c !== color) });
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -170,14 +211,45 @@ const Kho = () => {
                 />
               </div>
               <div>
-                <Label htmlFor="color">Màu sắc</Label>
+                <Label htmlFor="color">Màu sắc mặc định</Label>
                 <Input
                   id="color"
                   value={formData.color}
                   onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                  placeholder="VD: Trắng, Đen..."
+                  placeholder="VD: Đỏ"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="colors">Màu sắc có sẵn</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="colors"
+                    value={colorInput}
+                    onChange={(e) => setColorInput(e.target.value)}
+                    placeholder="Nhập màu và bấm Thêm"
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddColor())}
+                  />
+                  <Button type="button" onClick={handleAddColor} variant="outline">
+                    Thêm
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.colors.map((color) => (
+                    <div key={color} className="flex items-center gap-1 bg-secondary px-2 py-1 rounded text-sm">
+                      {color}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveColor(color)}
+                        className="text-destructive ml-1"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="price">Giá bán (VNĐ) *</Label>
                 <Input
@@ -197,6 +269,20 @@ const Kho = () => {
                   onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                   placeholder="VD: 5"
                 />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="image">Hình ảnh minh họa</Label>
+                <Input
+                  id="image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+                {imagePreview && (
+                  <div className="mt-2">
+                    <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded" />
+                  </div>
+                )}
               </div>
               <div className="col-span-2">
                 <Label htmlFor="description">Mô tả</Label>
@@ -265,6 +351,7 @@ const Kho = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Hình</TableHead>
                   <TableHead>Mã xe</TableHead>
                   <TableHead>Hãng</TableHead>
                   <TableHead>Model</TableHead>
@@ -278,18 +365,34 @@ const Kho = () => {
               <TableBody>
                 {vehicles.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground">
                       Chưa có xe trong kho
                     </TableCell>
                   </TableRow>
                 ) : (
                   vehicles.map((vehicle) => (
                     <TableRow key={vehicle.id}>
+                      <TableCell>
+                        {vehicle.image ? (
+                          <img src={vehicle.image} alt={vehicle.model} className="w-16 h-16 object-cover rounded" />
+                        ) : (
+                          <div className="w-16 h-16 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                            Không có ảnh
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">{vehicle.id}</TableCell>
                       <TableCell>{vehicle.brand}</TableCell>
                       <TableCell>{vehicle.model}</TableCell>
                       <TableCell>{vehicle.year}</TableCell>
-                      <TableCell>{vehicle.color || 'N/A'}</TableCell>
+                      <TableCell>
+                        {vehicle.color || 'N/A'}
+                        {vehicle.colors && vehicle.colors.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ({vehicle.colors.join(', ')})
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{formatCurrency(vehicle.price)}</TableCell>
                       <TableCell>
                         <span className={`font-semibold ${vehicle.quantity > 0 ? 'text-success' : 'text-destructive'}`}>
