@@ -189,7 +189,7 @@ const Kho = () => {
                   id="brand"
                   value={formData.brand}
                   onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                  placeholder="VD: Toyota, Honda..."
+
                 />
               </div>
               <div>
@@ -198,7 +198,6 @@ const Kho = () => {
                   id="model"
                   value={formData.model}
                   onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                  placeholder="VD: Camry, City..."
                 />
               </div>
               <div>
