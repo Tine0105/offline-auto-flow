@@ -3,7 +3,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import Kho from "./pages/Kho";
 import BanHang from "./pages/BanHang";
 import ThuNgan from "./pages/ThuNgan";
@@ -19,11 +21,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/kho" element={<Kho />} />
-          <Route path="/ban-hang" element={<BanHang />} />
-          <Route path="/thu-ngan" element={<ThuNgan />} />
-          <Route path="/quan-ly" element={<QuanLy />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/kho" element={<ProtectedRoute><Kho /></ProtectedRoute>} />
+          <Route path="/ban-hang" element={<ProtectedRoute><BanHang /></ProtectedRoute>} />
+          <Route path="/thu-ngan" element={<ProtectedRoute><ThuNgan /></ProtectedRoute>} />
+          <Route path="/quan-ly" element={<ProtectedRoute><QuanLy /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
