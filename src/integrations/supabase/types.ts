@@ -14,7 +14,282 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      brands: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      customers: {
+        Row: {
+          address_city: string | null
+          address_hamlet: string | null
+          address_house: string | null
+          address_raw: string | null
+          address_ward: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+          phone: string
+        }
+        Insert: {
+          address_city?: string | null
+          address_hamlet?: string | null
+          address_house?: string | null
+          address_raw?: string | null
+          address_ward?: string | null
+          created_at?: string
+          email: string
+          id: string
+          name: string
+          phone: string
+        }
+        Update: {
+          address_city?: string | null
+          address_hamlet?: string | null
+          address_house?: string | null
+          address_raw?: string | null
+          address_ward?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string
+        }
+        Relationships: []
+      }
+      inventory_reports: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          items: Json
+          note: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id: string
+          items?: Json
+          note?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          items?: Json
+          note?: string | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          paid_at: string | null
+          payment_method: string | null
+          serial_number: string | null
+          services: string[] | null
+          status: string
+          total_amount: number
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id: string
+          paid_at?: string | null
+          payment_method?: string | null
+          serial_number?: string | null
+          services?: string[] | null
+          status: string
+          total_amount: number
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          serial_number?: string | null
+          services?: string[] | null
+          status?: string
+          total_amount?: number
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_history: {
+        Row: {
+          customer_id: string
+          id: string
+          order_id: string
+          paid_at: string
+          payment_method: string | null
+          promotion_id: string | null
+          serial_number: string | null
+          services: Json | null
+          total_amount: number
+          vehicle_brand: string
+          vehicle_id: string
+          vehicle_model: string
+        }
+        Insert: {
+          customer_id: string
+          id: string
+          order_id: string
+          paid_at: string
+          payment_method?: string | null
+          promotion_id?: string | null
+          serial_number?: string | null
+          services?: Json | null
+          total_amount: number
+          vehicle_brand: string
+          vehicle_id: string
+          vehicle_model: string
+        }
+        Update: {
+          customer_id?: string
+          id?: string
+          order_id?: string
+          paid_at?: string
+          payment_method?: string | null
+          promotion_id?: string | null
+          serial_number?: string | null
+          services?: Json | null
+          total_amount?: number
+          vehicle_brand?: string
+          vehicle_id?: string
+          vehicle_model?: string
+        }
+        Relationships: []
+      }
+      promotions: {
+        Row: {
+          description: string | null
+          discount_percent: number
+          end_at: string | null
+          id: string
+          name: string
+          start_at: string | null
+          vehicle_ids: string[] | null
+        }
+        Insert: {
+          description?: string | null
+          discount_percent: number
+          end_at?: string | null
+          id: string
+          name: string
+          start_at?: string | null
+          vehicle_ids?: string[] | null
+        }
+        Update: {
+          description?: string | null
+          discount_percent?: number
+          end_at?: string | null
+          id?: string
+          name?: string
+          start_at?: string | null
+          vehicle_ids?: string[] | null
+        }
+        Relationships: []
+      }
+      services: {
+        Row: {
+          description: string
+          id: string
+          name: string
+          price: number
+        }
+        Insert: {
+          description: string
+          id: string
+          name: string
+          price: number
+        }
+        Update: {
+          description?: string
+          id?: string
+          name?: string
+          price?: number
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          brand: string
+          color: string
+          colors: string[] | null
+          created_at: string
+          description: string
+          id: string
+          image: string | null
+          model: string
+          price: number
+          quantity: number
+          vins: string[] | null
+          year: number
+        }
+        Insert: {
+          brand: string
+          color: string
+          colors?: string[] | null
+          created_at?: string
+          description: string
+          id: string
+          image?: string | null
+          model: string
+          price: number
+          quantity?: number
+          vins?: string[] | null
+          year: number
+        }
+        Update: {
+          brand?: string
+          color?: string
+          colors?: string[] | null
+          created_at?: string
+          description?: string
+          id?: string
+          image?: string | null
+          model?: string
+          price?: number
+          quantity?: number
+          vins?: string[] | null
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

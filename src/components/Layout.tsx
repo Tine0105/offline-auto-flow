@@ -1,8 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Package, ShoppingCart, DollarSign, BarChart3 } from 'lucide-react';
+import { Package, ShoppingCart, DollarSign, BarChart3, LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   const navItems = [
     { path: '/kho', label: 'Kho', icon: Package },
@@ -20,25 +23,38 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               <Package className="h-6 w-6 text-sidebar-primary" />
               <span className="text-xl font-bold text-sidebar-foreground">Hệ thống Bán Xe</span>
             </Link>
-            <div className="flex space-x-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                      isActive
-                        ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="font-medium">{item.label}</span>
-                  </Link>
-                );
-              })}
+            <div className="flex items-center space-x-4">
+              <div className="flex space-x-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+                        isActive
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+              {user && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={signOut}
+                  className="gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Đăng xuất
+                </Button>
+              )}
             </div>
           </div>
         </div>
